@@ -105,7 +105,6 @@
                                         <li t-if="record.priority_id.raw_value"><field name="priority_id"/></li>
                                         <li t-if="record.state.raw_value"><field name="state"/></li>
                                         <li t-if="record.category.raw_value"><field name="category"/></li>
-                                        <li t-if="record.description.raw_value"><t t-raw="record.description.raw_value"/></li>
                                     </ul>
                                     <div class="oe_kanban_partner_links"/>
                                 </div>

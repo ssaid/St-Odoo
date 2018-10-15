@@ -327,7 +327,8 @@ class WebsiteSupportTicket(models.Model):
         new_id.portal_access_key = randint(1000000000,2000000000)
 
         ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
-        ticket_open_email_template.send_mail(new_id.id, True)
+        if ticket_open_email_template:
+            ticket_open_email_template.send_mail(new_id.id, True)
 
         #Check if this contact has a SLA assigned
         if new_id.partner_id.sla_id:
