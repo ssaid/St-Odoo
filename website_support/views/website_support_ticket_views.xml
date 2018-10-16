@@ -121,13 +121,17 @@
             <field name="model">website.support.ticket</field>
             <field name="arch" type="xml">
                 <search>
-                    <field name="ticket_number"/>
+                    <field name="ticket_number" filter_domain="['|', ('ticket_number', '=', self), ('subject', 'ilike', self)]"/>
                     <field name="subject"/>
                     <field name="tag_ids"/>
+                    <field name="parent_company_id"/>
                     <field name="partner_id"/>
+                    <field name="person_name"/>
                     <filter string="Unattended Tickets" name="unattended_tickets" domain="[('unattended', '=', True )]" />
-                    <filter name="group_by_category" string="Category" domain="[]"  context="{'group_by':'category'}"/>
                     <filter name="group_by_user" string="User" domain="[]"  context="{'group_by':'user_id'}"/>
+                    <filter name="group_by_state" string="State" domain="[]"  context="{'group_by':'state'}"/>
+                    <filter name="group_by_partner" string="Partner" domain="[]"  context="{'group_by':'partner_id'}"/>
+                    <filter name="group_by_category" string="Category" domain="[]"  context="{'group_by':'category'}"/>
                 </search>
             </field>
         </record>
