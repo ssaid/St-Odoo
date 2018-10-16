@@ -101,7 +101,7 @@
                             <div class="oe_kanban_global_click o_res_partner_kanban">
                                 <div class="o_kanban_tags_section oe_kanban_partner_categories"/>
                                 <div class="oe_kanban_details">
-                                    <strong class="oe_partner_heading"><field name="subject"/></strong>
+                                    <strong class="oe_partner_heading"><field name="ticket_number"/> - <field name="subject"/></strong>
                                     <ul>
                                         <li t-if="record.priority_id.raw_value"><field name="priority_id"/></li>
                                         <li t-if="record.state.raw_value"><field name="state"/></li>
@@ -166,7 +166,7 @@
         <record id="website_support_ticket_action_partner" model="ir.actions.act_window">
             <field name="name">Support Tickets</field>
             <field name="res_model">website.support.ticket</field>
-            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="view_mode">kanban,tree,form,graph</field>
             <field name="help" type="html">
                 <p>
                     No Support Tickets found
@@ -177,7 +177,7 @@
         <record id="website_support_ticket_action" model="ir.actions.act_window">
             <field name="name">Support Tickets</field>
             <field name="res_model">website.support.ticket</field>
-            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="view_mode">kanban,tree,form,graph</field>
             <field name="context">{"search_default_unattended_tickets":1, 'auto_refresh': 1, 'default_create_user_id': uid}</field>
             <field name="help" type="html">
                 <p>
