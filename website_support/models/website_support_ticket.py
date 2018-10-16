@@ -54,7 +54,7 @@ class WebsiteSupportTicket(models.Model):
     channel = fields.Char(string="Channel", default="Manual")
     create_user_id = fields.Many2one('res.users', "Create User")
     priority_id = fields.Many2one('website.support.ticket.priority', default=_default_priority_id, string="Priority")
-    parent_company_id = fields.Many2one(string="Parent Company", related="partner_id.company_id")
+    parent_company_id = fields.Many2one(relation="res.partner", string="Parent Company", related="partner_id.parent_id")
     partner_id = fields.Many2one('res.partner', string="Partner")
     user_id = fields.Many2one('res.users', string="Assigned User")
     person_name = fields.Char(string='Person Name')
