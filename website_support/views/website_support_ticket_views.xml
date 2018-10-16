@@ -15,6 +15,7 @@
                         <button type="object" name="resume_sla" string="Resume SLA" attrs="{'invisible' :['|', ('sla_active', '!=', False ), ('sla_id','==', False)]}"/>
                         <button type="object" name="send_survey" string="Send Survey"/>
                         <button type="object" name="request_approval" string="Request Approval"/>
+                        <field name="state" domain="[('status_visible', '=', True)]" widget="statusbar" statusbar_visible="ppen"/>
                     </header>
                     <sheet>
                         <div class="oe_title">
@@ -29,7 +30,6 @@
                                 <field name="tag_ids" widget="many2many_tags"/>
                                 <field name="category"/>
                                 <field name="sub_category_id" domain="[('parent_category_id','=',category)]"/>
-                                <field name="state"/>
                             </group>
                             <group>
                                 <field name="user_id" domain="[('share','=',False)]"/>
@@ -92,7 +92,8 @@
                 <kanban class="o_res_partner_kanban" default_group_by="state" create="false">
                     <field name="subject"/>
                     <field name="priority_id"/>
-                    <field name="state"/>
+                    <field name="state" widget="statusbar"
+                        options="{'fold_field': 'fold'}"/>
                     <field name="category"/>
                     <field name="description"/>
                     <templates>

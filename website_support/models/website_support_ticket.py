@@ -471,6 +471,9 @@ class WebsiteSupportTicketStates(models.Model):
     _name = "website.support.ticket.states"
 
     name = fields.Char(required=True, translate=True, string='State Name')
+    status_visible = fields.Boolean(string='Status Visible', help='Check if wyou want this state to be visible in statusbar widget by default', default=False)
+    fold = fields.Boolean(string='Folded in Kanban',
+        help='This stage is folded in the kanban view when there are no records in that stage to display.')
     mail_template_id = fields.Many2one('mail.template', domain="[('model_id','=','website.support.ticket')]", string="Mail Template", help="The mail message that the customer gets when the state changes")
     unattended = fields.Boolean(string="Unattended", help="If ticked, tickets in this state will appear by default")
 
