@@ -144,7 +144,7 @@ class WebsiteSupportTicket(models.Model):
             elif active_sla_ticket.sla_rule_id.countdown_condition == '24_hour':
                 #Countdown even if the business hours setting is not set
                 active_sla_ticket.sla_timer -= 1/60
-                
+
             #(DEPRICATED use sla_rule_id) If we only countdown during busines hours
             if active_sla_ticket.sla_response_category_id.countdown_condition == 'business_only':
                 # Check if the current time aligns with a timeslot in the settings,
@@ -351,7 +351,6 @@ class WebsiteSupportTicket(models.Model):
         vals['ticket_number'] = self.env['ir.sequence'].next_by_code('website.support.ticket')
 
         new_id = super(WebsiteSupportTicket, self).create(vals)
-
         new_id.portal_access_key = randint(1000000000,2000000000)
 
         ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
@@ -364,7 +363,7 @@ class WebsiteSupportTicket(models.Model):
 
         #Check if this contact has a SLA assigned
         if new_id.partner_id.sla_id:
-            
+
             #Go through all rules starting from the lowest response time
             for sla_rule in new_id.partner_id.sla_id.rule_ids:
                 #All conditions have to match
@@ -384,7 +383,7 @@ class WebsiteSupportTicket(models.Model):
                         all_true = False
                     elif sla_rule_con.type == "priority" and new_id.priority_id.id != sla_rule_con.priority_id.id:
                         all_true = False
-                
+
                 if all_true:
                     new_id.sla_id = new_id.partner_id.sla_id.id
                     new_id.sla_active = True
@@ -418,13 +417,14 @@ class WebsiteSupportTicket(models.Model):
 
             #Remove the message from the chatter since this would bloat the communication history by a lot
             send_mail.mail_message_id.res_id = 0
-        
+
         if new_id.partner_id:
             msg = new_id.partner_id.name + ': ' + new_id.subject
         else:
             msg = new_id.subject
         publish.single('eynes/support/ticket', msg, hostname='mosquitto.e-mips.com.ar')
         return new_id
+
 
     @api.multi
     def write(self, values, context=None):
@@ -654,8 +654,15 @@ class WebsiteSupportTicketCompose(models.Model):
         values = email_wrapper.generate_email([self.id])[self.id]
         values['model'] = "website.support.ticket"
         values['res_id'] = self.ticket_id.id
-        send_mail = self.env['mail.mail'].create(values)
-        send_mail.send()
+        values['partner_ids'] = [self.ticket_id.partner_id.id]
+        # values['parent_id'] = res and res.id or False
+        # send_mail = self.env['mail.mail'].create(values)
+        # send_mail.send()
+        self.ticket_id.message_post(
+            message_type="comment",
+            subtype_id=self.sudo().env.ref('mail.mt_comment',
+                                           raise_if_not_found=False).id,
+            **values)
 
         #Add to the message history to keep the data clean from the rest HTML
         self.env['website.support.ticket.message'].create({'ticket_id': self.ticket_id.id, 'by': 'staff', 'content':self.body.replace("<p>","").replace("</p>","")})
@@ -671,3 +678,82 @@ class WebsiteSupportTicketCompose(models.Model):
             #Change the ticket state to staff replied
             staff_replied = self.env['ir.model.data'].get_object('website_support','website_ticket_state_staff_replied')
             self.ticket_id.state = staff_replied.id
+
+class MailThread(models.AbstractModel):
+    _name = 'mail.thread'
+    _inherit = 'mail.thread'
+
+    @api.multi
+    @api.returns('self', lambda value: value.id)
+    def message_post(self, *args, **kwargs):
+        res = super().message_post(*args, **kwargs)
+        new_id = self
+        if not new_id or new_id._name != 'website.support.ticket' or len(new_id.message_ids) > 1:
+            return new_id
+
+        new_id.portal_access_key = randint(1000000000,2000000000)
+
+        ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
+        if ticket_open_email_template:
+            # ticket_open_email_template.send_mail(new_id.id, True)
+            values = ticket_open_email_template.generate_email([new_id.id])[new_id.id]
+            values['model'] = "website.support.ticket"
+            values['res_id'] = new_id.id
+            if not new_id.partner_id:
+                new_id.partner_id = self.env['res.partner'].create({
+                    'name': new_id.person_name or new_id.email.split('@')[0],
+                    'email': new_id.email,
+                })
+            values['partner_ids'] = [new_id.partner_id.id]
+            values['parent_id'] = res and res.id or False
+
+            new_id.message_subscribe(partner_ids=values['partner_ids'],
+                                     force=True)
+            new_id.with_context({
+                'mail_post_autofollow': True,
+            }).message_post(
+                message_type="comment",
+                subtype_id=self.sudo().env.ref('mail.mt_comment',
+                                               raise_if_not_found=False).id,
+                **values)
+
+        #Check if this contact has a SLA assigned
+        if new_id.partner_id.sla_id:
+            #Check if this category has a SLA response time
+            category_response = self.env['website.support.sla.response'].search([('vsa_id','=',new_id.partner_id.sla_id.id), ('category_id','=',new_id.category.id)])
+            if category_response:
+                new_id.sla_id = new_id.partner_id.sla_id.id
+                new_id.sla_active = True
+                new_id.sla_timer = category_response.response_time
+                new_id.sla_response_category_id = category_response.id
+
+        #Send an email out to everyone in the category
+        notification_template = self.env['ir.model.data'].sudo().get_object('website_support', 'new_support_ticket_category')
+        support_ticket_menu = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_menu')
+        support_ticket_action = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_action')
+
+        for my_user in new_id.category.cat_user_ids:
+            #  values = notification_template.generate_email(new_id.id)
+            #  values['body_html'] = values['body_html'].replace("_ticket_url_", "web#id=" + str(new_id.id) + "&view_type=form&model=website.support.ticket&menu_id=" + str(support_ticket_menu.id) + "&action=" + str(support_ticket_action.id) ).replace("_user_name_",  my_user.partner_id.name)
+            #  values['email_to'] = my_user.partner_id.email
+
+            #  # send_mail = self.env['mail.mail'].create(values)
+            #  # send_mail.send()
+            #  message = new_id.message_post(
+            #      message_type="comment",
+            #      subtype_id=self.sudo().env.ref('mail.mt_comment',
+            #                                     raise_if_not_found=False).id,
+            #      **values)
+
+            #  #Remove the message from the chatter since this would bloat the communication history by a lot
+            #  message.res_id = 0
+
+            values = notification_template.generate_email(new_id.id)
+            values['body_html'] = values['body_html'].replace("_ticket_url_", "web#id=" + str(new_id.id) + "&view_type=form&model=website.support.ticket&menu_id=" + str(support_ticket_menu.id) + "&action=" + str(support_ticket_action.id) ).replace("_user_name_",  my_user.partner_id.name)
+            values['email_to'] = my_user.partner_id.email
+            send_mail = self.env['mail.mail'].create(values)
+            send_mail.send()
+            #Remove the message from the chatter since this would bloat the communication history by a lot
+            send_mail.mail_message_id.res_id = 0
+
+        return new_id
