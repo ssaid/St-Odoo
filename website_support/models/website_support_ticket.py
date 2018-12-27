@@ -55,7 +55,7 @@ class WebsiteSupportTicket(models.Model):
     channel = fields.Char(string="Channel", default="Manual")
     create_user_id = fields.Many2one('res.users', "Create User")
     priority_id = fields.Many2one('website.support.ticket.priority', default=_default_priority_id, string="Priority")
-    parent_company_id = fields.Many2one(string="Parent Company", related="partner_id.company_id")
+    parent_company_id = fields.Many2one(relation="res.partner", string="Parent Company", related="partner_id.parent_id")
     partner_id = fields.Many2one('res.partner', string="Partner")
     user_id = fields.Many2one('res.users', string="Assigned User")
     person_name = fields.Char(string='Person Name')
@@ -355,7 +355,8 @@ class WebsiteSupportTicket(models.Model):
         new_id.portal_access_key = randint(1000000000,2000000000)
 
         ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
-        ticket_open_email_template.send_mail(new_id.id, True)
+        if ticket_open_email_template:
+            ticket_open_email_template.send_mail(new_id.id, True)
 
         #If the customer has a dedicated support user then automatically assign them
         if new_id.partner_id.dedicated_support_user_id:
@@ -535,6 +536,9 @@ class WebsiteSupportTicketStates(models.Model):
     _name = "website.support.ticket.states"
 
     name = fields.Char(required=True, translate=True, string='State Name')
+    status_visible = fields.Boolean(string='Status Visible', help='Check if wyou want this state to be visible in statusbar widget by default', default=False)
+    fold = fields.Boolean(string='Folded in Kanban',
+        help='This stage is folded in the kanban view when there are no records in that stage to display.')
     mail_template_id = fields.Many2one('mail.template', domain="[('model_id','=','website.support.ticket')]", string="Mail Template", help="The mail message that the customer gets when the state changes")
     unattended = fields.Boolean(string="Unattended", help="If ticked, tickets in this state will appear by default")
 

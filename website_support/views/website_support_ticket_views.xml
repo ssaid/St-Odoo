@@ -15,6 +15,7 @@
                         <button type="object" name="resume_sla" string="Resume SLA" attrs="{'invisible' :['|', ('sla_active', '!=', False ), ('sla_id','==', False)]}"/>
                         <button type="object" name="send_survey" string="Send Survey"/>
                         <button type="object" name="request_approval" string="Request Approval"/>
+                        <field name="state" domain="[('status_visible', '=', True)]" widget="statusbar" statusbar_visible="ppen"/>
                     </header>
                     <sheet>
                         <div class="oe_title">
@@ -29,7 +30,6 @@
                                 <field name="tag_ids" widget="many2many_tags"/>
                                 <field name="category"/>
                                 <field name="sub_category_id" domain="[('parent_category_id','=',category)]"/>
-                                <field name="state"/>
                             </group>
                             <group>
                                 <field name="user_id" domain="[('share','=',False)]"/>
@@ -93,7 +93,8 @@
                 <kanban class="o_res_partner_kanban" default_group_by="state" create="false">
                     <field name="subject"/>
                     <field name="priority_id"/>
-                    <field name="state"/>
+                    <field name="state" widget="statusbar"
+                        options="{'fold_field': 'fold'}"/>
                     <field name="category"/>
                     <field name="description"/>
                     <templates>
@@ -101,12 +102,11 @@
                             <div class="oe_kanban_global_click o_res_partner_kanban">
                                 <div class="o_kanban_tags_section oe_kanban_partner_categories"/>
                                 <div class="oe_kanban_details">
-                                    <strong class="oe_partner_heading"><field name="subject"/></strong>
+                                    <strong class="oe_partner_heading"><field name="ticket_number"/> - <field name="subject"/></strong>
                                     <ul>
                                         <li t-if="record.priority_id.raw_value"><field name="priority_id"/></li>
                                         <li t-if="record.state.raw_value"><field name="state"/></li>
                                         <li t-if="record.category.raw_value"><field name="category"/></li>
-                                        <li t-if="record.description.raw_value"><t t-raw="record.description.raw_value"/></li>
                                     </ul>
                                     <div class="oe_kanban_partner_links"/>
                                 </div>
@@ -122,13 +122,17 @@
             <field name="model">website.support.ticket</field>
             <field name="arch" type="xml">
                 <search>
-                    <field name="ticket_number"/>
+                    <field name="ticket_number" filter_domain="['|', ('ticket_number', '=', self), ('subject', 'ilike', self)]"/>
                     <field name="subject"/>
                     <field name="tag_ids"/>
+                    <field name="parent_company_id"/>
                     <field name="partner_id"/>
+                    <field name="person_name"/>
                     <filter string="Unattended Tickets" name="unattended_tickets" domain="[('unattended', '=', True )]" />
-                    <filter name="group_by_category" string="Category" domain="[]"  context="{'group_by':'category'}"/>
                     <filter name="group_by_user" string="User" domain="[]"  context="{'group_by':'user_id'}"/>
+                    <filter name="group_by_state" string="State" domain="[]"  context="{'group_by':'state'}"/>
+                    <filter name="group_by_partner" string="Partner" domain="[]"  context="{'group_by':'partner_id'}"/>
+                    <filter name="group_by_category" string="Category" domain="[]"  context="{'group_by':'category'}"/>
                 </search>
             </field>
         </record>
@@ -167,7 +171,7 @@
         <record id="website_support_ticket_action_partner" model="ir.actions.act_window">
             <field name="name">Support Tickets</field>
             <field name="res_model">website.support.ticket</field>
-            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="view_mode">kanban,tree,form,graph</field>
             <field name="help" type="html">
                 <p>
                     No Support Tickets found
@@ -178,7 +182,7 @@
         <record id="website_support_ticket_action" model="ir.actions.act_window">
             <field name="name">Support Tickets</field>
             <field name="res_model">website.support.ticket</field>
-            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="view_mode">kanban,tree,form,graph</field>
             <field name="context">{"search_default_unattended_tickets":1, 'auto_refresh': 1, 'default_create_user_id': uid}</field>
             <field name="help" type="html">
                 <p>

@@ -21,15 +21,15 @@ class SupportTicketController(http.Controller):
     def support_approve(self, ticket_id, **kwargs):
         support_ticket = request.env['website.support.ticket'].sudo().browse( int(ticket_id) )
 
-        awaiting_approval = request.env['ir.model.data'].get_object('website_support','awaiting_approval')
+        awaiting_approval = request.env['ir.model.data'].sudo().get_object('website_support','awaiting_approval')
 
         if support_ticket.approval_id.id == awaiting_approval.id:
             #Change the ticket state to approved
-            website_ticket_state_approval_accepted = request.env['ir.model.data'].get_object('website_support','website_ticket_state_approval_accepted')
+            website_ticket_state_approval_accepted = request.env['ir.model.data'].sudo().get_object('website_support','website_ticket_state_approval_accepted')
             support_ticket.state = website_ticket_state_approval_accepted.id
 
             #Also change the approval
-            approval_accepted = request.env['ir.model.data'].get_object('website_support','approval_accepted')
+            approval_accepted = request.env['ir.model.data'].sudo().get_object('website_support','approval_accepted')
             support_ticket.approval_id = approval_accepted.id
 
             #Send an email out to everyone in the category notifing them the ticket has been approved
@@ -47,7 +47,7 @@ class SupportTicketController(http.Controller):
                 send_mail.send()
 
                 #Remove the message from the chatter since this would bloat the communication history by a lot
-                send_mail.mail_message_id.res_id = 0            
+                send_mail.mail_message_id.res_id = 0
 
             return "Request Approved Successfully"
         else:
@@ -57,15 +57,15 @@ class SupportTicketController(http.Controller):
     def support_disapprove(self, ticket_id, **kwargs):
         support_ticket = request.env['website.support.ticket'].sudo().browse( int(ticket_id) )
 
-        awaiting_approval = request.env['ir.model.data'].get_object('website_support','awaiting_approval')
+        awaiting_approval = request.env['ir.model.data'].sudo().get_object('website_support','awaiting_approval')
 
         if support_ticket.approval_id.id == awaiting_approval.id:
             #Change the ticket state to disapproved
-            website_ticket_state_approval_rejected = request.env['ir.model.data'].get_object('website_support','website_ticket_state_approval_rejected')
+            website_ticket_state_approval_rejected = request.env['ir.model.data'].sudo().get_object('website_support','website_ticket_state_approval_rejected')
             support_ticket.state = website_ticket_state_approval_rejected.id
 
             #Also change the approval
-            approval_rejected = request.env['ir.model.data'].get_object('website_support','approval_rejected')
+            approval_rejected = request.env['ir.model.data'].sudo().get_object('website_support','approval_rejected')
             support_ticket.approval_id = approval_rejected.id
 
             #Send an email out to everyone in the category notifing them the ticket has been approved
@@ -84,7 +84,7 @@ class SupportTicketController(http.Controller):
 
                 #Remove the message from the chatter since this would bloat the communication history by a lot
                 send_mail.mail_message_id.res_id = 0
-                
+
             return "Request Rejected Successfully"
         else:
             return "Ticket does not need approval"
@@ -167,9 +167,6 @@ class SupportTicketController(http.Controller):
         for field_name, field_value in kw.items():
             values[field_name] = field_value
 
-        if 'rating' not in values:
-            return "Please select a rating"
-
         support_ticket = request.env['website.support.ticket'].sudo().search([('portal_access_key','=', portal_key)])
 
         if support_ticket.support_rating:
@@ -198,7 +195,7 @@ class SupportTicketController(http.Controller):
         setting_allow_user_signup = request.env['ir.default'].get('website.support.settings', 'allow_user_signup')
 
         if setting_allow_user_signup:
- 
+
             values = {}
             for field_name, field_value in kw.items():
                 values[field_name] = field_value
@@ -271,7 +268,7 @@ class SupportTicketController(http.Controller):
         category_access = []
         for category_permission in http.request.env.user.groups_id:
             category_access.append(category_permission.id)
-            
+
         ticket_categories = http.request.env['website.support.ticket.categories'].sudo().search(['|',('access_group_ids','in', category_access), ('access_group_ids','=',False)])
 
         setting_google_recaptcha_active = request.env['ir.default'].get('website.support.settings', 'google_recaptcha_active')
@@ -279,7 +276,7 @@ class SupportTicketController(http.Controller):
         setting_max_ticket_attachments = request.env['ir.default'].get('website.support.settings', 'max_ticket_attachments')
         setting_max_ticket_attachment_filesize = request.env['ir.default'].get('website.support.settings', 'max_ticket_attachment_filesize')
         setting_allow_website_priority_set = request.env['ir.default'].get('website.support.settings', 'allow_website_priority_set')
-        
+
         return http.request.render('website_support.support_submit_ticket', {'categories': ticket_categories, 'priorities': http.request.env['website.support.ticket.priority'].sudo().search([]), 'person_name': person_name, 'email': http.request.env.user.email, 'setting_max_ticket_attachments': setting_max_ticket_attachments, 'setting_max_ticket_attachment_filesize': setting_max_ticket_attachment_filesize, 'setting_google_recaptcha_active': setting_google_recaptcha_active, 'setting_google_captcha_client_key': setting_google_captcha_client_key, 'setting_allow_website_priority_set': setting_allow_website_priority_set})
 
     @http.route('/support/feedback/process/<help_page>', type="http", auth="public", website=True)
@@ -342,7 +339,7 @@ class SupportTicketController(http.Controller):
 
         setting_google_recaptcha_active = request.env['ir.default'].get('website.support.settings', 'google_recaptcha_active')
         setting_allow_website_priority_set = request.env['ir.default'].get('website.support.settings', 'allow_website_priority_set')
-            
+
         if setting_google_recaptcha_active:
 
             setting_google_captcha_secret_key = request.env['ir.default'].get('website.support.settings', 'google_captcha_secret_key')
@@ -356,7 +353,7 @@ class SupportTicketController(http.Controller):
 
             if response_json.json()['success'] is not True:
                 return werkzeug.utils.redirect("/support/ticket/submit")
-                
+
         my_attachment = ""
         file_name = ""
 
@@ -434,14 +431,8 @@ class SupportTicketController(http.Controller):
         values = {}
         for field_name, field_value in kw.items():
             values[field_name] = field_value
-        
-        #Determine which tickets the logged in user can see
-        ticket_access = []
-        
-        #Can see own tickets
-        ticket_access.append(http.request.env.user.partner_id.id)
 
-        #Can see tickets of any contacts under the logged in users additional access field (TODO remove this as departments is the evolved version of this feature)
+        extra_access = []
         for extra_permission in http.request.env.user.partner_id.stp_ids:
             ticket_access.append(extra_permission.id)
 
@@ -573,7 +564,9 @@ class SupportTicketController(http.Controller):
         help_pages = request.env['website.support.help.page'].sudo().search([('name','=ilike',"%" + values['term'] + "%")],limit=5)
 
         for help_page in help_pages:
-            return_item = {"label": help_page.name,"value": "/support/help/" + slug(help_page.group_id) + "/" + slug(help_page)}
-            my_return.append(return_item) 
+
+            #return_item = {"label": help_page.name + "<br/><sub>" + help_page.group_id.name + "</sub>","value": help_page.url_generated}
+            return_item = {"label": help_page.name,"value": help_page.url_generated}
+            my_return.append(return_item)
 
         return json.JSONEncoder().encode(my_return)
