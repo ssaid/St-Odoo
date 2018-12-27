@@ -6,10 +6,11 @@ import datetime
 from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT, DEFAULT_SERVER_DATE_FORMAT
 from odoo import SUPERUSER_ID
 from dateutil import tz
+import re
+import paho.mqtt.publish as publish
 
 import logging
 _logger = logging.getLogger(__name__)
-
 
 class WebsiteSupportTicket(models.Model):
 
@@ -97,7 +98,8 @@ class WebsiteSupportTicket(models.Model):
     sla_timer = fields.Float(string="SLA Time Remaining")
     sla_timer_format = fields.Char(string="SLA Timer Format", compute="_compute_sla_timer_format")
     sla_active = fields.Boolean(string="SLA Active")
-    sla_response_category_id = fields.Many2one('website.support.sla.response', string="SLA Response Category")
+    sla_response_category_id = fields.Many2one('website.support.sla.response', string="(DEPRICATED) SLA Response Category")
+    sla_rule_id = fields.Many2one('website.support.sla.rule', string="SLA Rule")
     sla_alert_ids = fields.Many2many('website.support.sla.alert', string="SLA Alerts",
                                      help="Keep record of SLA alerts sent so we do not resend them")
 
@@ -114,10 +116,36 @@ class WebsiteSupportTicket(models.Model):
         for active_sla_ticket in self.env['website.support.ticket'].search([
             ('sla_active','=',True),
             ('sla_id','!=',False),
-            ('sla_response_category_id','!=',False)
+            '|',
+            ('sla_response_category_id','!=',False),
+            ('sla_rule_id','!=',False)
         ]):
 
             # If we only countdown during busines hours
+            if active_sla_ticket.sla_rule_id.countdown_condition == 'business_only':
+                # Check if the current time aligns with a timeslot in the settings,
+                # setting has to be set for business_only or UserError occurs
+                setting_business_hours_id = self.env['ir.default'].get('website.support.settings', 'business_hours_id')
+                current_hour = datetime.datetime.now().hour
+                current_minute = datetime.datetime.now().minute / 60
+                current_hour_float = current_hour + current_minute
+                day_of_week = datetime.datetime.now().weekday()
+                during_work_hours = self.env['resource.calendar.attendance'].search([('calendar_id','=', setting_business_hours_id), ('dayofweek','=',day_of_week), ('hour_from','<',current_hour_float), ('hour_to','>',current_hour_float)])
+
+                # If holiday module is installed take into consideration
+                holiday_module = self.env['ir.module.module'].search([('name','=','hr_public_holidays'), ('state','=','installed')])
+                if holiday_module:
+                    holiday_today = self.env['hr.holidays.public.line'].search([('date','=',datetime.datetime.now().date())])
+                    if holiday_today:
+                        during_work_hours = False
+
+                if during_work_hours:
+                    active_sla_ticket.sla_timer -= 1/60
+            elif active_sla_ticket.sla_rule_id.countdown_condition == '24_hour':
+                #Countdown even if the business hours setting is not set
+                active_sla_ticket.sla_timer -= 1/60
+                
+            #(DEPRICATED use sla_rule_id) If we only countdown during busines hours
             if active_sla_ticket.sla_response_category_id.countdown_condition == 'business_only':
                 # Check if the current time aligns with a timeslot in the settings,
                 # setting has to be set for business_only or UserError occurs
@@ -137,7 +165,7 @@ class WebsiteSupportTicket(models.Model):
 
                 if during_work_hours:
                     active_sla_ticket.sla_timer -= 1/60
-            else:
+            elif active_sla_ticket.sla_response_category_id.countdown_condition == '24_hour':
                 #Countdown even if the business hours setting is not set
                 active_sla_ticket.sla_timer -= 1/60
 
@@ -330,9 +358,41 @@ class WebsiteSupportTicket(models.Model):
         if ticket_open_email_template:
             ticket_open_email_template.send_mail(new_id.id, True)
 
+        #If the customer has a dedicated support user then automatically assign them
+        if new_id.partner_id.dedicated_support_user_id:
+            new_id.user_id = new_id.partner_id.dedicated_support_user_id.id
+
         #Check if this contact has a SLA assigned
         if new_id.partner_id.sla_id:
-            #Check if this category has a SLA response time
+            
+            #Go through all rules starting from the lowest response time
+            for sla_rule in new_id.partner_id.sla_id.rule_ids:
+                #All conditions have to match
+                _logger.error(sla_rule.name)
+                all_true = True
+                for sla_rule_con in sla_rule.condition_ids:
+                    _logger.error("rule type:" + str(sla_rule_con.type))
+                    _logger.error("ticket category: " + str(new_id.category.name))
+                    _logger.error("rule category: " + str(sla_rule_con.category_id.name))
+                    _logger.error("ticket sub category: " + str(new_id.sub_category_id.name))
+                    _logger.error("rule sub category: " + str(sla_rule_con.subcategory_id.name))
+                    _logger.error("ticket priority: " + str(new_id.priority_id.name))
+                    _logger.error("rule priority: " + str(sla_rule_con.priority_id.name))
+                    if sla_rule_con.type == "category" and new_id.category.id != sla_rule_con.category_id.id:
+                        all_true = False
+                    elif sla_rule_con.type == "subcategory" and new_id.sub_category_id.id != sla_rule_con.subcategory_id.id:
+                        all_true = False
+                    elif sla_rule_con.type == "priority" and new_id.priority_id.id != sla_rule_con.priority_id.id:
+                        all_true = False
+                
+                if all_true:
+                    new_id.sla_id = new_id.partner_id.sla_id.id
+                    new_id.sla_active = True
+                    new_id.sla_timer = sla_rule.response_time
+                    new_id.sla_rule_id = sla_rule.id
+                    break
+
+            #(DEPRICATED) Check if this category has a SLA response time
             category_response = self.env['website.support.sla.response'].search([('vsa_id','=',new_id.partner_id.sla_id.id), ('category_id','=',new_id.category.id)])
             if category_response:
                 new_id.sla_id = new_id.partner_id.sla_id.id
@@ -345,6 +405,9 @@ class WebsiteSupportTicket(models.Model):
         support_ticket_menu = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_menu')
         support_ticket_action = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_action')
 
+        #Add them as a follower to the ticket so they are aware of any internal notes
+        new_id.message_subscribe_users(user_ids=new_id.category.cat_user_ids.ids)
+
         for my_user in new_id.category.cat_user_ids:
             values = notification_template.generate_email(new_id.id)
             values['body_html'] = values['body_html'].replace("_ticket_url_", "web#id=" + str(new_id.id) + "&view_type=form&model=website.support.ticket&menu_id=" + str(support_ticket_menu.id) + "&action=" + str(support_ticket_action.id) ).replace("_user_name_",  my_user.partner_id.name)
@@ -355,7 +418,12 @@ class WebsiteSupportTicket(models.Model):
 
             #Remove the message from the chatter since this would bloat the communication history by a lot
             send_mail.mail_message_id.res_id = 0
-
+        
+        if new_id.partner_id:
+            msg = new_id.partner_id.name + ': ' + new_id.subject
+        else:
+            msg = new_id.subject
+        publish.single('eynes/support/ticket', msg, hostname='mosquitto.e-mips.com.ar')
         return new_id
 
     @api.multi
@@ -395,11 +463,8 @@ class WebsiteSupportTicket(models.Model):
         return update_rec
 
     def send_survey(self):
-
         notification_template = self.env['ir.model.data'].sudo().get_object('website_support', 'support_ticket_survey')
         values = notification_template.generate_email(self.id)
-        surevey_url = "support/survey/" + str(self.portal_access_key)
-        values['body_html'] = values['body_html'].replace("_survey_url_",surevey_url)
         send_mail = self.env['mail.mail'].create(values)
         send_mail.send(True)
 
@@ -504,12 +569,19 @@ class WebsiteSupportTicketUsers(models.Model):
 
     cat_user_ids = fields.Many2many('website.support.ticket.categories', string="Category Users")
 
-class WebsiteSupportTicketCompose(models.Model):
+class WebsiteSupportTicketClose(models.TransientModel):
 
     _name = "website.support.ticket.close"
 
     ticket_id = fields.Many2one('website.support.ticket', string="Ticket ID")
-    message = fields.Text(string="Close Message")
+    message = fields.Html(string="Close Message")
+    template_id = fields.Many2one('mail.template', string="Mail Template", domain="[('model_id','=','website.support.ticket'), ('built_in','=',False)]")
+
+    @api.onchange('template_id')
+    def _onchange_template_id(self):
+        if self.template_id:
+            values = self.env['mail.compose.message'].generate_email_for_composer(self.template_id.id, [self.ticket_id.id])[self.ticket_id.id]
+            self.message = values['body']
 
     def close_ticket(self):
 
@@ -527,7 +599,7 @@ class WebsiteSupportTicketCompose(models.Model):
         message = "<ul class=\"o_mail_thread_message_tracking\">\n<li>State:<span> " + self.ticket_id.state.name + " </span><b>-></b> " + closed_state.name + " </span></li></ul>"
         self.ticket_id.message_post(body=message, subject="Ticket Closed by Staff")
 
-        self.ticket_id.close_comment = self.message
+        self.ticket_id.close_comment = re.compile(r'<[^>]+>').sub('', self.message)
         self.ticket_id.closed_by_id = self.env.user.id
         self.ticket_id.state = closed_state.id
 
@@ -537,11 +609,6 @@ class WebsiteSupportTicketCompose(models.Model):
         setting_auto_send_survey = self.env['ir.default'].get('website.support.settings', 'auto_send_survey')
         if setting_auto_send_survey:
             self.ticket_id.send_survey()
-
-        closed_state_mail_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_staff_closed').mail_template_id
-
-        if closed_state_mail_template:
-            closed_state_mail_template.send_mail(self.ticket_id.id, True)
 
 class WebsiteSupportTicketCompose(models.Model):
 

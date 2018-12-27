@@ -246,7 +246,7 @@ class SupportTicketController(http.Controller):
         """ Displays stats related to tickets in the department """
 
         #Just get the first department, managers in multiple departments are not supported
-        department = request.env['website.support.department.contact'].search([('user_id','=',request.env.user.id)])[0].wsd_id
+        department = request.env['website.support.department.contact'].sudo().search([('user_id','=',request.env.user.id)])[0].sudo().wsd_id
 
         extra_access = []
         for extra_permission in department.partner_ids:
@@ -363,26 +363,35 @@ class SupportTicketController(http.Controller):
             sub_category = ""
 
 
+        create_dict = {'person_name':values['person_name'],'category':values['category'], 'sub_category_id': sub_category, 'email':values['email'], 'description':values['description'], 'subject':values['subject'], 'attachment': my_attachment, 'attachment_filename': file_name}
+
         if http.request.env.user.name != "Public user":
-            new_ticket_id = request.env['website.support.ticket'].sudo().create({'person_name':values['person_name'],'category':values['category'], 'sub_category_id': sub_category, 'email':values['email'], 'description':values['description'], 'subject':values['subject'], 'partner_id':http.request.env.user.partner_id.id, 'attachment': my_attachment, 'attachment_filename': file_name, 'channel': 'Website (User)'})
 
+            create_dict['channel'] = 'Website (User)'
+            
             partner = http.request.env.user.partner_id
+            create_dict['partner_id'] = partner.id
 
-            #Add to the communication history
-            partner.message_post(body="Customer " + partner.name + " has sent in a new support ticket", subject="New Support Ticket")
-
+            #Priority can only be set if backend setting allows everyone or partner
             if 'priority' in values and (setting_allow_website_priority_set == "partner" or setting_allow_website_priority_set == "everyone"):
-                new_ticket_id.priority_id = int(values['priority'])
+                create_dict['priority_id'] = int(values['priority'])
+
+            #Add to the communication history of the logged in user
+            partner.message_post(body="Customer " + partner.name + " has sent in a new support ticket", subject="New Support Ticket")
         else:
-            search_partner = request.env['res.partner'].sudo().search([('email','=', values['email'] )])
 
-            if len(search_partner) > 0:
-                new_ticket_id = request.env['website.support.ticket'].sudo().create({'person_name':values['person_name'], 'category':values['category'], 'sub_category_id': sub_category, 'email':values['email'], 'description':values['description'], 'subject':values['subject'], 'attachment': my_attachment, 'attachment_filename': file_name, 'partner_id':search_partner[0].id, 'channel': 'Website (Public)'})
-            else:
-                new_ticket_id = request.env['website.support.ticket'].sudo().create({'person_name':values['person_name'], 'category':values['category'], 'sub_category_id': sub_category, 'email':values['email'], 'description':values['description'], 'subject':values['subject'], 'attachment': my_attachment, 'attachment_filename': file_name, 'channel': 'Website (Public)'})
-
+            create_dict['channel'] = 'Website (Public)'
+            
+            #Priority can only be set if backend setting allows everyone
             if 'priority' in values and setting_allow_website_priority_set == "everyone":
-                new_ticket_id.priority_id = int(values['priority'])
+                create_dict['priority_id'] = int(values['priority'])
+            
+            #Automatically assign the partner if email matches
+            search_partner = request.env['res.partner'].sudo().search([('email','=', values['email'] )])
+            if len(search_partner) > 0:
+                create_dict['partner_id'] = search_partner[0].id
+
+        new_ticket_id = request.env['website.support.ticket'].sudo().create(create_dict)
 
         if "subcategory" in values:
             #Also get the data from the extra fields
@@ -425,19 +434,26 @@ class SupportTicketController(http.Controller):
 
         extra_access = []
         for extra_permission in http.request.env.user.partner_id.stp_ids:
-            extra_access.append(extra_permission.id)
+            ticket_access.append(extra_permission.id)
 
+        #If the logged in user is a department manager then add all the contacts in the department to the access list
+        for dep in request.env['website.support.department.contact'].sudo().search([('user_id','=',http.request.env.user.id)]):
+            for contact in dep.wsd_id.partner_ids:
+                ticket_access.append(contact.id)
+
+        search_t = [('partner_id', 'in', ticket_access), ('partner_id','!=',False)]
+        
         if 'state' in values:
-            support_tickets = http.request.env['website.support.ticket'].sudo().search(['|', ('partner_id','=',http.request.env.user.partner_id.id), ('partner_id', 'in', extra_access), ('partner_id','!=',False), ('state', '=', int(values['state'])) ])
-        else:
-            support_tickets = http.request.env['website.support.ticket'].sudo().search(['|', ('partner_id','=',http.request.env.user.partner_id.id), ('partner_id', 'in', extra_access), ('partner_id','!=',False) ])
+            search_t.append(('state', '=', int(values['state'])))
+
+        support_tickets = request.env['website.support.ticket'].sudo().search(search_t)
 
         no_approval_required = request.env['ir.model.data'].get_object('website_support','no_approval_required')
-        change_requests = http.request.env['website.support.ticket'].sudo().search(['|', ('partner_id','=',http.request.env.user.partner_id.id), ('partner_id', 'in', extra_access), ('partner_id','!=',False), ('approval_id','!=',no_approval_required.id) ], order="planned_time desc")
+        change_requests = request.env['website.support.ticket'].sudo().search([('partner_id', 'in', ticket_access), ('partner_id','!=',False), ('approval_id','!=',no_approval_required.id) ], order="planned_time desc")
 
-        ticket_states = http.request.env['website.support.ticket.states'].sudo().search([])
+        ticket_states = request.env['website.support.ticket.states'].sudo().search([])
 
-        return http.request.render('website_support.support_ticket_view_list', {'support_tickets':support_tickets,'ticket_count':len(support_tickets), 'change_requests': change_requests, 'request_count': len(change_requests), 'ticket_states': ticket_states})
+        return request.render('website_support.support_ticket_view_list', {'support_tickets':support_tickets,'ticket_count':len(support_tickets), 'change_requests': change_requests, 'request_count': len(change_requests), 'ticket_states': ticket_states})
 
     @http.route('/support/ticket/view/<ticket>', type="http", auth="user", website=True)
     def support_ticket_view(self, ticket):
@@ -548,6 +564,7 @@ class SupportTicketController(http.Controller):
         help_pages = request.env['website.support.help.page'].sudo().search([('name','=ilike',"%" + values['term'] + "%")],limit=5)
 
         for help_page in help_pages:
+
             #return_item = {"label": help_page.name + "<br/><sub>" + help_page.group_id.name + "</sub>","value": help_page.url_generated}
             return_item = {"label": help_page.name,"value": help_page.url_generated}
             my_return.append(return_item)

@@ -1,3 +1,35 @@
+v1.0.18
+=======
+* Display user friendly error if call fails for any reason e.g. no media access
+
+v1.0.17
+=======
+* Smart button on Twilio account screen that shows calls for that account
+
+v1.0.16
+=======
+* Code out the need to have the Twilio Python library installed for capabilty token generation
+
+v1.0.15
+=======
+* Fix call history import
+
+v1.0.14
+=======
+* Fix cability token url using http in https systems
+
+v1.0.13
+=======
+* Fix mySound undefined bug on outgoing calls
+
+v1.0.12
+=======
+* Automatically generate Twilio client name
+
+v1.0.11
+=======
+* Ability to call leads
+
 v1.0.10
 =======
 * Can now write a post call comment, you can also listen to call recording using a link inside the chatter

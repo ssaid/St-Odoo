@@ -1,3 +1,44 @@
+v1.4.6
+======
+* Fix permission issues with support clients assigned as department managers not being able to view website reporting interface
+
+v1.4.5
+======
+* Fix approval mail permissions
+
+v1.4.4
+======
+* Close ticket email templates
+* Fix Fix help page search
+* Fix double close comment email bug
+
+v1.4.3
+======
+* Fix permission issue with survey and change requests being inaccessible for public users
+
+v1.4.2
+======
+* Fix ticket submit issue with public users with existing emails submitting tickets (introduced in v1.4.0)
+
+v1.4.1
+======
+* Fix issue with survey link appearing as _survey_url_ in chatter
+
+v1.4.0
+======
+* SLA overhaul to support multiple conditions e.g. Priority = Urgent AND Category = Technical Support
+* Fix Issue with Support Managers access being lost on module update (will apply to future versions)
+* Ability to add image to help groups (optional)
+
+v1.3.12
+=======
+* Department manager access to department contact tickets fix
+* Automatically add category follower to ticket followers
+
+v1.3.11
+=======
+* Ability to assign a customer to a dedicated support staff member
+
 v1.3.10
 =======
 * Help page unpublish / republish

@@ -18,6 +18,14 @@ class HtmlFieldResponse():
 
 class HtmlFormController(http.Controller):
 
+    def _html_action_send_email(self, submit_action, history_data, values):
+        
+        values = submit_action.email_template_id.generate_email(history_data.id)
+        values['email_from'] = submit_action.from_email
+        values['email_to'] = submit_action.to_email
+        send_mail = request.env['mail.mail'].create(values)
+        send_mail.send()
+
     def _html_action_custom_server_action(self, submit_action, history_data, values):
         form_record = request.env[history_data.html_id.model_id.model].browse(history_data.record_id)
         submit_action.custom_server_action.with_context({'active_id': form_record.id, 'active_model': history_data.html_id.model_id.model}).run()
@@ -364,7 +372,11 @@ class HtmlFormController(http.Controller):
                 html_output += "    <option value=\"" + selection_value + "\">" + selection_label + "</option>\n"
 
         elif field.field_id.ttype == "many2one":
-            selection_list = request.env[field.field_id.relation].search([])
+
+            if field.field_id.domain:
+                selection_list = request.env[field.field_id.relation].search(field.field_id.domain)
+            else:
+                selection_list = request.env[field.field_id.relation].search([])
 
             for row in selection_list:
                 html_output += "    <option value=\"" + str(row.id) + "\">" + row.name + "</option>\n"
@@ -386,7 +398,7 @@ class HtmlFormController(http.Controller):
         form_string = ""
         form_string += "  <div class=\"container mt16 mb16\">\n"
         form_string += "    <h2>" + html_form.name + "</h2>\n"
-        form_string += "    <form role=\"form\" method=\"POST\" action=\"" + html_form.submit_url + "\" enctype=\"multipart/form-data\">\n"
+        form_string += "    <form role=\"form\" method=\"POST\" action=\"/form/sinsert\" enctype=\"multipart/form-data\">\n"
         form_string += "      <div class=\"oe_structure\" id=\"html_fields\">\n"
 
         for form_field in html_form.fields_ids:
@@ -430,7 +442,7 @@ class HtmlFormController(http.Controller):
         form_string = ""
         form_string += "  <div class=\"container mt16 mb16\">\n"
         form_string += "    <h2>" + html_form.name + "</h2>\n"
-        form_string += "    <form role=\"form\" method=\"POST\" action=\"" + html_form.submit_url + "\" enctype=\"multipart/form-data\">\n"
+        form_string += "    <form role=\"form\" method=\"POST\" action=\"/form/sinsert\" enctype=\"multipart/form-data\">\n"
         form_string += "      <div class=\"oe_structure\" id=\"html_fields\"/>\n"
         form_string += "      <input type=\"hidden\" name=\"form_id\" value=\"" + str(html_form.id) + "\"/>\n"
         form_string += "      <input type=\"hidden\" name=\"csrf_token\"/>\n"
@@ -583,7 +595,7 @@ class HtmlFormController(http.Controller):
             #default values
             for df in entity_form.defaults_values:
                 if df.field_id.ttype == "many2many":
-                    secure_values[df.field_id.name] = [(4, request.env[df.field_id.relation].search([('name', '=', df.default_value)])[0].id)]
+                    secure_values[df.field_id.name] = [(4, request.env[df.field_id.relation].sudo().search([('name', '=', df.default_value)])[0].id)]
                 else:
                     if df.default_value == "user_id":
                         secure_values[df.field_id.name] = request.env.user.id
