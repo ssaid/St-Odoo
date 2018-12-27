@@ -7,6 +7,7 @@ from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT, DEFAULT_SERVER_DATE_FORMA
 from odoo import SUPERUSER_ID
 from dateutil import tz
 import re
+import paho.mqtt.publish as publish
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -416,7 +417,12 @@ class WebsiteSupportTicket(models.Model):
 
             #Remove the message from the chatter since this would bloat the communication history by a lot
             send_mail.mail_message_id.res_id = 0
-
+        
+        if new_id.partner_id:
+            msg = new_id.partner_id.name + ': ' + new_id.subject
+        else:
+            msg = new_id.subject
+        publish.single('eynes/support/ticket', msg, hostname='mosquitto.e-mips.com.ar')
         return new_id
 
     @api.multi
