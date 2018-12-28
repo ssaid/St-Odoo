@@ -351,73 +351,73 @@ class WebsiteSupportTicket(models.Model):
         vals['ticket_number'] = self.env['ir.sequence'].next_by_code('website.support.ticket')
 
         new_id = super(WebsiteSupportTicket, self).create(vals)
-        new_id.portal_access_key = randint(1000000000,2000000000)
-
-        ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
-        if ticket_open_email_template:
-            ticket_open_email_template.send_mail(new_id.id, True)
-
-        #If the customer has a dedicated support user then automatically assign them
-        if new_id.partner_id.dedicated_support_user_id:
-            new_id.user_id = new_id.partner_id.dedicated_support_user_id.id
-
-        #Check if this contact has a SLA assigned
-        if new_id.partner_id.sla_id:
-
-            #Go through all rules starting from the lowest response time
-            for sla_rule in new_id.partner_id.sla_id.rule_ids:
-                #All conditions have to match
-                _logger.error(sla_rule.name)
-                all_true = True
-                for sla_rule_con in sla_rule.condition_ids:
-                    _logger.error("rule type:" + str(sla_rule_con.type))
-                    _logger.error("ticket category: " + str(new_id.category.name))
-                    _logger.error("rule category: " + str(sla_rule_con.category_id.name))
-                    _logger.error("ticket sub category: " + str(new_id.sub_category_id.name))
-                    _logger.error("rule sub category: " + str(sla_rule_con.subcategory_id.name))
-                    _logger.error("ticket priority: " + str(new_id.priority_id.name))
-                    _logger.error("rule priority: " + str(sla_rule_con.priority_id.name))
-                    if sla_rule_con.type == "category" and new_id.category.id != sla_rule_con.category_id.id:
-                        all_true = False
-                    elif sla_rule_con.type == "subcategory" and new_id.sub_category_id.id != sla_rule_con.subcategory_id.id:
-                        all_true = False
-                    elif sla_rule_con.type == "priority" and new_id.priority_id.id != sla_rule_con.priority_id.id:
-                        all_true = False
-
-                if all_true:
-                    new_id.sla_id = new_id.partner_id.sla_id.id
-                    new_id.sla_active = True
-                    new_id.sla_timer = sla_rule.response_time
-                    new_id.sla_rule_id = sla_rule.id
-                    break
-
-            #(DEPRICATED) Check if this category has a SLA response time
-            category_response = self.env['website.support.sla.response'].search([('vsa_id','=',new_id.partner_id.sla_id.id), ('category_id','=',new_id.category.id)])
-            if category_response:
-                new_id.sla_id = new_id.partner_id.sla_id.id
-                new_id.sla_active = True
-                new_id.sla_timer = category_response.response_time
-                new_id.sla_response_category_id = category_response.id
-
-        #Send an email out to everyone in the category
-        notification_template = self.env['ir.model.data'].sudo().get_object('website_support', 'new_support_ticket_category')
-        support_ticket_menu = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_menu')
-        support_ticket_action = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_action')
-
-        #Add them as a follower to the ticket so they are aware of any internal notes
-        new_id.message_subscribe_users(user_ids=new_id.category.cat_user_ids.ids)
-
-        for my_user in new_id.category.cat_user_ids:
-            values = notification_template.generate_email(new_id.id)
-            values['body_html'] = values['body_html'].replace("_ticket_url_", "web#id=" + str(new_id.id) + "&view_type=form&model=website.support.ticket&menu_id=" + str(support_ticket_menu.id) + "&action=" + str(support_ticket_action.id) ).replace("_user_name_",  my_user.partner_id.name)
-            values['email_to'] = my_user.partner_id.email
-
-            send_mail = self.env['mail.mail'].create(values)
-            send_mail.send()
-
-            #Remove the message from the chatter since this would bloat the communication history by a lot
-            send_mail.mail_message_id.res_id = 0
-
+#        new_id.portal_access_key = randint(1000000000,2000000000)
+#
+#        # ticket_open_email_template = self.env['ir.model.data'].get_object('website_support', 'website_ticket_state_open').mail_template_id
+#        # if ticket_open_email_template:
+#        #     ticket_open_email_template.send_mail(new_id.id, True)
+#
+#        #If the customer has a dedicated support user then automatically assign them
+#        if new_id.partner_id.dedicated_support_user_id:
+#            new_id.user_id = new_id.partner_id.dedicated_support_user_id.id
+#
+#        #Check if this contact has a SLA assigned
+#        if new_id.partner_id.sla_id:
+#
+#            #Go through all rules starting from the lowest response time
+#            for sla_rule in new_id.partner_id.sla_id.rule_ids:
+#                #All conditions have to match
+#                _logger.error(sla_rule.name)
+#                all_true = True
+#                for sla_rule_con in sla_rule.condition_ids:
+#                    _logger.error("rule type:" + str(sla_rule_con.type))
+#                    _logger.error("ticket category: " + str(new_id.category.name))
+#                    _logger.error("rule category: " + str(sla_rule_con.category_id.name))
+#                    _logger.error("ticket sub category: " + str(new_id.sub_category_id.name))
+#                    _logger.error("rule sub category: " + str(sla_rule_con.subcategory_id.name))
+#                    _logger.error("ticket priority: " + str(new_id.priority_id.name))
+#                    _logger.error("rule priority: " + str(sla_rule_con.priority_id.name))
+#                    if sla_rule_con.type == "category" and new_id.category.id != sla_rule_con.category_id.id:
+#                        all_true = False
+#                    elif sla_rule_con.type == "subcategory" and new_id.sub_category_id.id != sla_rule_con.subcategory_id.id:
+#                        all_true = False
+#                    elif sla_rule_con.type == "priority" and new_id.priority_id.id != sla_rule_con.priority_id.id:
+#                        all_true = False
+#
+#                if all_true:
+#                    new_id.sla_id = new_id.partner_id.sla_id.id
+#                    new_id.sla_active = True
+#                    new_id.sla_timer = sla_rule.response_time
+#                    new_id.sla_rule_id = sla_rule.id
+#                    break
+#
+#            #(DEPRICATED) Check if this category has a SLA response time
+#            category_response = self.env['website.support.sla.response'].search([('vsa_id','=',new_id.partner_id.sla_id.id), ('category_id','=',new_id.category.id)])
+#            if category_response:
+#                new_id.sla_id = new_id.partner_id.sla_id.id
+#                new_id.sla_active = True
+#                new_id.sla_timer = category_response.response_time
+#                new_id.sla_response_category_id = category_response.id
+#
+#        #Send an email out to everyone in the category
+#        notification_template = self.env['ir.model.data'].sudo().get_object('website_support', 'new_support_ticket_category')
+#        support_ticket_menu = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_menu')
+#        support_ticket_action = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_action')
+#
+#        #Add them as a follower to the ticket so they are aware of any internal notes
+#        new_id.message_subscribe_users(user_ids=new_id.category.cat_user_ids.ids)
+#
+#        for my_user in new_id.category.cat_user_ids:
+#            values = notification_template.generate_email(new_id.id)
+#            values['body_html'] = values['body_html'].replace("_ticket_url_", "web#id=" + str(new_id.id) + "&view_type=form&model=website.support.ticket&menu_id=" + str(support_ticket_menu.id) + "&action=" + str(support_ticket_action.id) ).replace("_user_name_",  my_user.partner_id.name)
+#            values['email_to'] = my_user.partner_id.email
+#
+#            send_mail = self.env['mail.mail'].create(values)
+#            send_mail.send()
+#
+#            #Remove the message from the chatter since this would bloat the communication history by a lot
+#            send_mail.mail_message_id.res_id = 0
+#
         if new_id.partner_id:
             msg = new_id.partner_id.name + ': ' + new_id.subject
         else:
@@ -731,6 +731,9 @@ class MailThread(models.AbstractModel):
         notification_template = self.env['ir.model.data'].sudo().get_object('website_support', 'new_support_ticket_category')
         support_ticket_menu = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_menu')
         support_ticket_action = self.env['ir.model.data'].sudo().get_object('website_support', 'website_support_ticket_action')
+
+        #Add them as a follower to the ticket so they are aware of any internal notes
+        new_id.message_subscribe_users(user_ids=new_id.category.cat_user_ids.ids)
 
         for my_user in new_id.category.cat_user_ids:
             #  values = notification_template.generate_email(new_id.id)
