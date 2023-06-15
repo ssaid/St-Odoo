@@ -15,6 +15,7 @@
                         <button type="object" name="resume_sla" string="Resume SLA" attrs="{'invisible' :['|', ('sla_active', '!=', False ), ('sla_id','==', False)]}"/>
                         <button type="object" name="send_survey" string="Send Survey"/>
                         <button type="object" name="request_approval" string="Request Approval"/>
+                        <button type="object" name="quiet_closing" string="Cierre Silencioso 🤫"//>
                         <field name="state" domain="[('status_visible', '=', True)]" widget="statusbar" statusbar_visible="ppen"/>
                     </header>
                     <sheet>

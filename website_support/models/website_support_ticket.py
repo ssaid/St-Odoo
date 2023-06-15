@@ -308,6 +308,23 @@ class WebsiteSupportTicket(models.Model):
             self.unattended = True
 
     @api.multi
+    def quiet_closing(self):
+        self.ensure_one()
+        query = """
+        UPDATE website_support_ticket
+        SET state = %(state_id)s,
+        unattended = False
+        WHERE id = %(id)s
+        """
+        q_vals = {
+            'state_id': self.env.ref(
+            'website_support.website_ticket_state_staff_closed').id,
+            'id': self.id,
+        }
+        self._cr.execute(query, q_vals)
+        return True
+
+    @api.multi
     def request_approval(self):
 
         approval_email = self.env['ir.model.data'].get_object('website_support', 'support_ticket_approval')
@@ -689,7 +706,7 @@ class MailThread(models.AbstractModel):
         res = super().message_post(*args, **kwargs)
         new_id = self
         if not new_id or new_id._name != 'website.support.ticket' or len(new_id.message_ids) > 1:
-            return new_id
+            return res
 
         new_id.portal_access_key = randint(1000000000,2000000000)
 
@@ -759,4 +776,4 @@ class MailThread(models.AbstractModel):
             #Remove the message from the chatter since this would bloat the communication history by a lot
             send_mail.mail_message_id.res_id = 0
 
-        return new_id
+        return res
